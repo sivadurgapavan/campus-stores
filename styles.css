@@ -272,6 +272,60 @@ body > main {
 #campus-stores .record p {
   margin-top: 5px;
 }
+#campus-stores .draftcard {
+  margin: 0 0 14px;
+  padding: 11px 13px 12px;
+  background: var(--memo);
+  color: var(--memotxt);
+  border-left: 3px solid var(--mark);
+  border-radius: 0 7px 7px 0;
+}
+#campus-stores .drafttop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+}
+#campus-stores .drafttop small {
+  color: inherit;
+  opacity: 0.8;
+  display: block;
+  margin-top: 1px;
+}
+#campus-stores .draftcard h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+#campus-stores .draftcard h3::before {
+  content: "Draft";
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 5px;
+  opacity: 0.75;
+}
+#campus-stores .draftbody {
+  margin: 8px 0 0;
+  font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#campus-stores .draftnote {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+#campus-stores .draftcard button {
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+  flex-shrink: 0;
+}
 #campus-stores .buttons {
   flex-wrap: wrap;
   margin: 10px 0;

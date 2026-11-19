@@ -107,6 +107,7 @@
     ],
     notes: [],
     editing: false,
+    drafting: false,
     onlyOpen: true,
     notice: "Sample shift · All records are fictional.",
   });
@@ -114,6 +115,77 @@
   const getAsset = (id) => assets.find((x) => x.id === id);
   const getReq = (id) => requests.find((x) => x.id === id);
   const out = (id) => s.loans.find((l) => l.asset === id && !l.back);
+  const label = (id) => (getAsset(id) || { type: id }).type;
+  // The handover note is built only from the loan register. It cannot know who
+  // is actually holding an item, so it prints the collector and says so.
+  function handoverDraft() {
+    const back = s.loans.filter((l) => l.back && l.at === s.phase);
+    const open = s.loans.filter((l) => !l.back);
+    const booked = requests.filter(
+      (r) => !s.loans.some((l) => l.req === r.id),
+    );
+    const lines = [shifts[s.phase].time + " · handover draft"];
+    lines.push(
+      back.length
+        ? "Back this shift: " +
+            back
+              .map((l) => "L-" + l.num + " " + l.asset + " " + label(l.asset))
+              .join("; ") +
+            "."
+        : "Back this shift: nothing recorded.",
+    );
+    if (open.length) {
+      lines.push("Still out (" + open.length + "):");
+      for (const l of open)
+        lines.push(
+          "- " +
+            l.asset +
+            " " +
+            label(l.asset) +
+            " · L-" +
+            l.num +
+            " · " +
+            l.who +
+            " · due " +
+            l.due +
+            " · " +
+            l.req +
+            " " +
+            getReq(l.req).club,
+        );
+    } else lines.push("Still out: none, every slip is closed.");
+    if (booked.length)
+      lines.push(
+        "Not issued yet: " +
+          booked
+            .map(
+              (r) =>
+                r.id +
+                " " +
+                r.club +
+                " · " +
+                r.items.length +
+                (r.items.length === 1 ? " item" : " items") +
+                " · due " +
+                r.due,
+            )
+            .join("; ") +
+          ".",
+      );
+    lines.push(
+      "Record check: " +
+        back.length +
+        " closed this shift, " +
+        open.length +
+        " open.",
+    );
+    return {
+      text: lines.join("\n"),
+      back: back.length,
+      open: open.length,
+      booked: booked.length,
+    };
+  }
   const esc = (x) =>
     String(x).replace(
       /[&<>"']/g,
@@ -299,6 +371,23 @@
       "Desk book",
       "Messages from clubs and notes for the next shift",
     );
+    const draft = handoverDraft();
+    html +=
+      '<section class="draftcard" aria-labelledby="draft-title">' +
+      '<div class="drafttop"><div><h3 id="draft-title">Handover draft</h3><small>' +
+      draft.open +
+      " open · " +
+      draft.back +
+      " closed this shift · " +
+      draft.booked +
+      " not issued</small></div>" +
+      btn("Use draft", "use-draft") +
+      "</div>" +
+      '<p class="draftbody">' +
+      esc(draft.text) +
+      "</p>" +
+      '<p class="draftnote">Generated from the loan register alone. It cannot know who is actually holding a unit, so check the names before saving.</p>' +
+      "</section>";
     const entries = [
       [
         "Friday · 3:20 pm",
@@ -330,7 +419,13 @@
         "</p></article>";
     return (
       html +
-      '<form data-note><div class="form"><label class="full"><span>Note for the next shift</span><textarea name="note" rows="2" maxlength="400" required></textarea></label></div><button type="submit">Add handover note</button></form>'
+      '<form data-note><div class="form"><label class="full"><span>Note for the next shift</span><textarea name="note" rows="5" maxlength="800" required placeholder="Use the draft above, then edit it.">' +
+      esc(s.drafting ? handoverDraft().text : "") +
+      "</textarea></label></div>" +
+      (s.drafting
+        ? '<button type="submit" class="primary">Save handover note</button>'
+        : '<button type="submit">Add handover note</button>') +
+      "</form>"
     );
   }
   const screens = {
@@ -385,6 +480,7 @@
         break;
       case "advance":
         if (s.phase < 2) s.phase++;
+        s.drafting = false;
         s.notice = "Shift time updated.";
         break;
       case "tab":
@@ -406,11 +502,27 @@
       case "scope":
         s.onlyOpen = v === "0";
         break;
+      case "use-draft":
+        s.drafting = true;
+        s.notice =
+          "Draft placed in the note. Check the names, edit anything wrong, then save.";
+        break;
       case "return": {
         const l = s.loans.find((l) => l.num === Number(v));
         if (!l || l.back) return;
         l.back = true;
-        s.notice = l.asset + " returned to stock. Slip L-" + l.num + " closed.";
+        l.at = s.phase;
+        s.notice =
+          l.asset +
+          " " +
+          label(l.asset) +
+          " returned to stock. Slip L-" +
+          l.num +
+          " (" +
+          l.req +
+          " " +
+          getReq(l.req).club +
+          ") closed.";
         break;
       }
     }
@@ -429,7 +541,8 @@
     if (f.matches("[data-note]")) {
       const text = String(form.get("note")).trim();
       if (!text) return;
-      s.notes.push({ phase: s.phase, text });
+      s.notes.push({ phase: s.phase, text, drafting: s.drafting });
+      s.drafting = false;
       commit("Handover note saved.");
       return;
     }
@@ -475,13 +588,18 @@
       !d.loans.length ||
       !d.loans.every(
         (l) =>
-          l && getReq(l.req) && getAsset(l.asset) && Number.isInteger(l.num),
+          l &&
+          getReq(l.req) &&
+          getAsset(l.asset) &&
+          Number.isInteger(l.num) &&
+          (l.at === undefined || Number.isInteger(l.at)),
       )
     )
       return;
     s = {
       ...original(),
       ...d,
+      drafting: d.drafting === true,
       loans: d.loans.map((l) => ({ ...l })),
       notes: d.notes.map((n) => ({ ...n })),
     };
